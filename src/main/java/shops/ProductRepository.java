@@ -11,11 +11,34 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public class ProductRepository {
+
+    public Product findById(int id){
+        try(Connection connection = DriverManager.getConnection("jdbc:sqlite:shop.db");
+            PreparedStatement ps = connection.prepareStatement("SELECT * FROM products WHERE id = ?"))
+        {
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()){
+               return new Product(
+                       rs.getInt("id"),
+                       rs.getString("name"),
+                       rs.getInt("price_cents"));
+
+            }
+            else{
+                return null;
+            }
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+    }
+
+
     public List<Product> findAll(){
         List<Product> result = new ArrayList<>();
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:shop.db");
              Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("SELECT * FROM products ORDER BY id");){
+             ResultSet resultSet = statement.executeQuery("SELECT * FROM products ORDER BY id")){
 
             while (resultSet.next()) {
                 result.add(new Product(

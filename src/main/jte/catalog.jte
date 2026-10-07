@@ -18,7 +18,7 @@
 
     <body>
         <h1>Каталог</h1>
-        <span id="cart-info">Корзина (${cartCount})</span>
+        <a href="/cart"><span id="cart-info">Корзина (${cartCount})</span></a>
         <ul>
             @for(Product p : products)
             <li>
