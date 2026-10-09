@@ -3,6 +3,7 @@
 
 @param List<CartLine> lines
 @param int total
+@param String error
 <!DOCTYPE html>
 
 <html lang="ru">
@@ -17,36 +18,18 @@
 
 <body>
     <h1>Корзина</h1>
-<div class="table-cart">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Название</th>
-                <th>Количество</th>
-                <th>Сумма по строке</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            @for(CartLine line : lines)
-            <tr>
-                <td>
-                    ${line.product().name()}
-                </td>
-                <td>
-                    ${line.qty()}
-                </td>
-                <td>
-                    ${line.lineTotal()/100} ₸
-                </td>
-            </tr>
-            @endfor
-            <tr>
-            </tr>
-        </tbody>
-    </table>
-    <h3>Итоговая сумма: ${total / 100} ₸</h3>
-</div>
+    @if(!error.isEmpty())
+        <p style="color: red">${error}</p>
+    @endif
+    <div id="cart-table">
+        @template.cartTable(lines = lines, total = total)
+    </div>
+    <form action="/orders" method="post">
+        <label for="email">Email: </label>
+        <input type="email" name="email" id="email" required/>
+        <input type="submit" value="Оформить заказ">
+    </form>
     <a href="/"><span>Назад в каталог</span></a>
+
 </body>
 </html>

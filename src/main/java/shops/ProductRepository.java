@@ -23,7 +23,6 @@ public class ProductRepository {
                        rs.getInt("id"),
                        rs.getString("name"),
                        rs.getInt("price_cents"));
-
             }
             else{
                 return null;
