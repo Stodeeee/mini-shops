@@ -16,3 +16,10 @@
         <li>${event.createdAt()}: ${event.message()}</li>
     @endfor
 </ul>
+@if(order.status().equals("CREATED"))
+    <button hx-post="/orders/${order.id()}/pay"
+            hx-target="#order-status"
+            hx-swap="innerHTML">
+        Оплатить
+    </button>
+@endif

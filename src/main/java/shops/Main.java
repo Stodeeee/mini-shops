@@ -5,6 +5,7 @@ import gg.jte.TemplateEngine;
 import gg.jte.output.StringOutput;
 import gg.jte.resolve.DirectoryCodeResolver;
 import io.javalin.Javalin;
+import io.javalin.http.Context;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,6 +33,26 @@ public class Main {
         }
         return lines;
     }
+    static void renderOrderStatus(Context ctx, int id,
+                                  OrderRepository orderRepository,
+                                  TemplateEngine templateEngine) {
+        Order order = orderRepository.findById(id);
+        if (order == null) {
+            ctx.status(404);
+            return;
+        }
+        List<OrderEvent> events = orderRepository.findEvents(id);
+
+        StringOutput output = new StringOutput();
+        templateEngine.render("orderStatus.jte", Map.of("order", order, "events", events), output);
+
+        ctx.contentType("text/html; charset=utf-8");
+        ctx.result(output.toString());
+
+        if (order.isFinal()) {
+            ctx.status(286);
+        }
+    }
 
     public static void main(String[] args) {
 
@@ -41,6 +62,7 @@ public class Main {
 
         OrderRepository orderRepository = new OrderRepository();
         ProductRepository productRepository = new ProductRepository();
+        FakePaymentGateway fakePaymentGateway = new FakePaymentGateway();
 
         Javalin app = Javalin.create(config -> {
 //--------------PAGE: CATALOG---------------
@@ -227,23 +249,66 @@ public class Main {
 //------------------------PAGE: ORDER Part-(Status)-----------------
             config.routes.get("/orders/{id}/status", ctx -> {
                 int id = Integer.parseInt(ctx.pathParam("id"));
+                renderOrderStatus(ctx, id, orderRepository, templateEngine);
+            });
+//------------------------PAGE: ADMIN Part-(Chaos)-----------------
+            config.routes.get("/admin/chaos", ctx -> {
+
+                PaymentMode paymentMode = FakePaymentGateway.getPaymentMode();
+
+                StringOutput output = new StringOutput();
+                templateEngine.render("chaos.jte", Map.of("paymentMode", paymentMode), output);
+
+                ctx.contentType("text/html; charset=utf-8");
+                ctx.result(output.toString());
+            });
+//------------------------PAGE: ADMIN Part-(ChaosMode)-----------------
+            config.routes.post("/admin/chaos/{mode}", ctx -> {
+
+                String mode = ctx.pathParam("mode");
+                PaymentMode paymentMode;
+                try {
+                    paymentMode = PaymentMode.valueOf(mode.toUpperCase());
+                }
+                catch (IllegalArgumentException e) {
+                    ctx.status(400);
+                    return;
+                }
+                FakePaymentGateway.setPaymentMode(paymentMode);
+
+
+                StringOutput output = new StringOutput();
+                templateEngine.render("chaosMode.jte", Map.of("paymentMode", paymentMode), output);
+
+                ctx.contentType("text/html; charset=utf-8");
+                ctx.result(output.toString());
+            });
+//---------------------PAGE: ORDER Part-(Paid)-----------------
+            config.routes.post("/orders/{id}/pay", ctx -> {
+                int id = Integer.parseInt(ctx.pathParam("id"));
 
                 Order order = orderRepository.findById(id);
                 if (order == null) {
                     ctx.status(404);
                     return;
                 }
-                List<OrderEvent> events = orderRepository.findEvents(id);
 
-                StringOutput output = new StringOutput();
-                templateEngine.render("orderStatus.jte", Map.of("order", order, "events", events), output);
+                boolean isTaken = orderRepository.changeStatus(id, "CREATED", "PAYING", "Оплата началась");
 
-                ctx.contentType("text/html; charset=utf-8");
-                ctx.result(output.toString());
-
-                if (order.isFinal()) {
-                    ctx.status(286);
+                if (isTaken) {
+                    try {
+                        String paymentRef = FakePaymentGateway.charge(id, order.totalCents());
+                        orderRepository.changeStatus(id, "PAYING", "PAID", "Оплачено, платёж " + paymentRef);
+                    } catch (CardDeclinedException e) {
+                        orderRepository.changeStatus(id, "PAYING", "PAYMENT_FAILED", "Карта отклонена");
+                    } catch (GatewayUnavailableException e) {
+                        orderRepository.changeStatus(id, "PAYING", "CREATED", "Шлюз недоступен, попробуйте позже");
+                    } catch (RuntimeException e) {
+                        orderRepository.changeStatus(id, "PAYING", "CREATED", "Ошибка оплаты, попробуйте позже");
+                    }
                 }
+
+                renderOrderStatus(ctx, id, orderRepository, templateEngine);
             });
         });
         app.start(8080);

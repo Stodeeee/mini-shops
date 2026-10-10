@@ -7,7 +7,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class OrderRepository {
 
@@ -119,4 +121,47 @@ public class OrderRepository {
             throw new RuntimeException("Не удалось создать заказ", e);
         }
     }
+    public boolean changeStatus(int orderId, String fromStatus,  String toStatus, String message){
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:shop.db");
+             PreparedStatement cs = connection.prepareStatement
+                     ("UPDATE orders SET status = ? WHERE id = ? AND status = ?");
+             PreparedStatement eventPs = connection.prepareStatement(
+                     "INSERT INTO order_events (order_id, message) VALUES (?, ?)"))
+        {
+            connection.setAutoCommit(false);
+            try {
+                cs.setString(1, toStatus);
+                cs.setInt(2, orderId);
+                cs.setString(3, fromStatus);
+                int changedRows = cs.executeUpdate();
+                if(changedRows == 0){
+                    return false;
+                }
+                eventPs.setInt(1, orderId);
+                eventPs.setString(2, message);
+                eventPs.executeUpdate();
+
+                connection.commit();
+                return true;
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        }catch(SQLException e){
+            throw new RuntimeException("Не удалось сменить статус заказа",e);
+        }
+    }
+    public void addEvent(int orderId, String message) {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:shop.db");
+             PreparedStatement eventPs = connection.prepareStatement(
+                     "INSERT INTO order_events (order_id, message) VALUES (?, ?)")) {
+
+            eventPs.setInt(1, orderId);
+            eventPs.setString(2, message);
+            eventPs.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Не удалось добавить событие", e);
+        }
+    }
 }
+
